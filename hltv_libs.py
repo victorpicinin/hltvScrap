@@ -4,7 +4,7 @@ import datetime
 from bs4 import BeautifulSoup
 from datetime import date
 import pandas as pd
-
+import numpy as np
 def get_parsed_page(url):
     # This fixes a blocked by cloudflare error i've encountered
     headers = {
@@ -42,8 +42,6 @@ def top30teams():
         teamlist.append(newteam)
     return teamlist
 
-
-
 def get_old_matches(url):
     page = get_parsed_page(url)
     all_matches = page.find_all("div", {"class": "result-con"})
@@ -51,7 +49,6 @@ def get_old_matches(url):
     for match in all_matches:
         matches_url.append('https://www.hltv.org' + match.find('a', {'class': 'a-reset'})['href'])
     return matches_url
-
 
 def top_players():
     page = get_parsed_page("https://www.hltv.org/stats")
@@ -68,7 +65,6 @@ def top_players():
 
         playersArray.append(playerObj)
     return playersArray
-
 
 def get_team_names(match):
     dicty = {}
@@ -114,9 +110,61 @@ def get_team_history(team):
         team_id = match.find('img',{"class":'team-logo'})['src'][match.find('img',{"class":'team-logo'})['src'].find('logo/')+5:len(match.find('img',{"class":'team-logo'})['src'])]
         team_name = match.find('img',{"class":'team-logo'})['alt']
         outcome = match.find('div',{'class':'highlighted-match-status'}).text
-        outcome_versus_initial_team.update({'out team':team_name,'in team':current_team,'Result':outcome,'team_url':'https://www.hltv.org/team/'+str(team_id)+'/'+team_name.replace(' ','-')})
+        match_link = str(match)[str(match).find('href="')+6:str(match).find('">')]
+        outcome_versus_initial_team.update({'out team':team_name,'in team':current_team,'Result':outcome,'team_url':'https://www.hltv.org/team/'+str(team_id)+'/'+team_name.replace(' ','-'),'Match Link':'https://www.hltv.org'+match_link})
         results_dataframe = results_dataframe.append(outcome_versus_initial_team,ignore_index=True)
     return results_dataframe
+
+def get_team_PiRatio(team_link):
+    team_history = get_team_history(team_link)
+    match_score = 0
+    for Index,row in team_history.iterrows():
+        team_score = 0
+        out_team_score = 0
+        page = get_parsed_page(row['Match Link'])
+        maps = page.find_all('div',{"class":"results-teamname-container text-ellipsis"})
+        for mapp in maps:
+            if row['in team'] in str(mapp) and mapp.find('div',{'class','results-team-score'}).text != '-':
+                #print(mapp.find('div',{'class','results-team-score'}).text)
+                team_score = team_score + int(mapp.find('div',{'class','results-team-score'}).text)
+            elif row['in team'] not in str(mapp) and mapp.find('div',{'class','results-team-score'}).text != '-':
+                #print(mapp.find('div',{'class','results-team-score'}).text)
+                out_team_score = out_team_score + int(mapp.find('div',{'class','results-team-score'}).text)
+        match_score = (team_score - out_team_score)/100 + match_score
+    return match_score
+
+def get_team_stats(team,teamNo):
+    overview = get_parsed_page('https://www.hltv.org/stats/teams/players/' + team[team.find('/team/')+6:])
+    flashes = get_parsed_page('https://www.hltv.org/stats/teams/players/flashes/' + team[team.find('/team/')+6:])
+    openin_Kills = get_parsed_page('https://www.hltv.org/stats/teams/players/openingkills/' + team[team.find('/team/')+6:])
+
+    table = overview.find("table",{"class":"stats-table player-ratings-table"})
+    overview = pd.read_html(str(table))
+    overview = overview[0]
+
+    #FLASHBANGS------
+    table = flashes.find("table",{"class":"stats-table player-ratings-table"})
+    flashes = pd.read_html(str(table))
+    flashes = flashes[0]
+    flashes['Blinded'] = flashes['Blinded'].astype(str).str[:-1].astype(np.double)
+    flashes['Opp Flashed'] = flashes['Opp Flashed'].astype(str).str[:-1].astype(np.double)
+    flashes['Diff'] = flashes['Diff'].astype(str).str[-1:].astype(np.double)
+    #FLASHBANGS------
+
+    table = openin_Kills.find("table",{"class":"stats-table player-ratings-table"})
+    openin_Kills = pd.read_html(str(table))
+    openin_Kills = openin_Kills[0]
+    return {  
+    #FLASHBANGS------
+    teamNo + '_' + 'Maps': round(flashes['Maps'].mean(),2),
+    teamNo + '_' + 'Thrown': round(flashes['Thrown'].mean(),2),
+    teamNo + '_' + 'Blinded': round(flashes['Blinded'].mean(),2),
+    teamNo + '_' + 'Opp Flashed': round(flashes['Opp Flashed'].mean(),2),
+    teamNo + '_' + 'Diff Flash': round(flashes['Diff'].mean(),2),
+    teamNo + '_' + 'FA': round(flashes['FA'].mean(),2),
+    teamNo + '_' + 'Success': round(flashes['Success'].mean(),2),
+    #FLASHBANGS------
+    }
 
 def get_winner(match):
     page = get_parsed_page(match)
@@ -131,10 +179,10 @@ def get_winner(match):
     else:
         return 2
 
-def get_player_stats(player,day,mapp):
+def get_player_stats(player,day):
     #?startDate=2019-11-06&endDate=2019-12-06
     data = date.today() - datetime.timedelta(days=day)
-    page = get_parsed_page(player+'?startDate='+data.strftime('%Y-%m-%d')+'&endDate='+date.today().strftime('%Y-%m-%d')+'&maps='+mapp)
+    page = get_parsed_page(player+'?startDate='+data.strftime('%Y-%m-%d')+'&endDate='+date.today().strftime('%Y-%m-%d'))
     stats = page.find_all("div", {"class": "col stats-rows standard-box"})
     statisc = {}
     team = page.find("a",{"class":"a-reset text-ellipsis"}).text
@@ -148,7 +196,6 @@ def get_player_stats(player,day,mapp):
                 #print(rows[y].text + '  -  ' + rows[y+1].text)
                 statisc.update({rows[y].text:rows[y+1].text.replace('%','')})
                 y= y+2
-    #print(statisc)
     return statisc
 
 def scrap_players_by_team(team):
@@ -267,74 +314,3 @@ def get_results():
             results_list.append(resultObj)
 
     return results_list
-
-def get_results_by_date(start_date, end_date):
-    # Dates like yyyy-mm-dd  (iso)
-    results_list = []
-    offset = 0
-    # Loop through all stats pages
-    while True:
-        url = "https://www.hltv.org/stats/matches?startDate="+start_date+"&endDate="+end_date+"&offset="+str(offset)
-
-        results = get_parsed_page(url)
-
-        # Total amount of results of the query
-        amount = int(results.find("span", attrs={"class": "pagination-data"}).text.split("of")[1].strip())
-
-        # All rows (<tr>s) of the match table
-        pastresults = results.find("tbody").find_all("tr")
-
-        # Parse each <tr> element to a result dictionary
-        for result in pastresults:
-            team_cols = result.find_all("td", {"class": "team-col"})
-            t1 = team_cols[0].find("a").text
-            t2 = team_cols[1].find("a").text
-            t1_score = int(team_cols[0].find_all(attrs={"class": "score"})[0].text.strip()[1:-1])
-            t2_score = int(team_cols[1].find_all(attrs={"class": "score"})[0].text.strip()[1:-1])
-            map = result.find(attrs={"class": "statsDetail"}).find(attrs={"class": "dynamic-map-name-full"}).text
-            event = result.find(attrs={"class": "event-col"}).text
-            date = result.find(attrs={"class": "date-col"}).find("a").find("div").text
-
-            result_dict = {"team1": t1, "team2": t2, "team1score": t1_score,
-                           "team2score": t2_score, "date": date, "map": map, "event": event}
-
-            # Add this pages results to the result list
-            results_list.append(result_dict)
-
-        # Get the next 50 results (next page) or break
-        if offset < amount:
-            offset += 50
-        else:
-            break
-
-    return results_list
-
-if __name__ == "__main__":
-    import pprint
-    pp = pprint.PrettyPrinter()
-    
-    pp.pprint('top5')
-    pp.pprint(top5teams())
-
-    pp.pprint('top30')
-    pp.pprint(top30teams())
-    
-    pp.pprint('top_players')
-    pp.pprint(top_players())
-    
-    pp.pprint('get_players')
-    pp.pprint(get_players('6665'))
-    
-    pp.pprint('get_team_info')
-    pp.pprint(get_team_info('6665'))
-
-    pp.pprint('get_matches')
-    pp.pprint(get_matches())
-
-    pp.pprint('get_results')
-    pp.pprint(get_results())
-
-    pp.pprint('get_results_by_date')
-    today_iso = datetime.datetime.today().isoformat().split('T')[0]
-    pp.pprint(get_results_by_date(today_iso, today_iso))
-   
