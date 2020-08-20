@@ -166,6 +166,23 @@ def get_team_stats(team,teamNo):
     #FLASHBANGS------
     }
 
+
+def get_numRounds_pastMatches(team):
+    matches = get_parsed_page('https://www.hltv.org/stats/teams/matches/' + team[team.find('/team/')+6:] )
+    table = matches.find("table",{"class":"stats-table no-sort"})
+    matches = pd.read_html(str(table))
+    matches = matches[0]
+    teamName = team[team.find('/team/')+11:]
+    totalrounds = pd.DataFrame(matches['W/L'].str.split(' - ',1).tolist(),columns = [teamName,'Opponent'])
+    totalrounds[teamName] = totalrounds[teamName].astype(int)
+    totalrounds['Opponent'] = totalrounds['Opponent'].astype(int)
+    totalrounds['Total Rounds'] = totalrounds[teamName] + totalrounds['Opponent']
+
+    df_concat = pd.concat([matches, totalrounds], axis=1)
+    df_concat.rename(columns={'Opponent':'del','Unnamed: 6': 'W/L','W/L': 'Result','Map':'Opponent','Result':'Map'}, inplace=True)
+    del df_concat['del']
+    return df_concat
+
 def get_winner(match):
     page = get_parsed_page(match)
     team = page.find("div",{"class":"teamName"}).text
