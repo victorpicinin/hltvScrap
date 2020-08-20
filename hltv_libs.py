@@ -173,10 +173,10 @@ def get_numRounds_pastMatches(team):
     matches = pd.read_html(str(table))
     matches = matches[0]
     teamName = team[team.find('/team/')+11:]
-    totalrounds = pd.DataFrame(matches['W/L'].str.split(' - ',1).tolist(),columns = [teamName,'Opponent'])
+    totalrounds = pd.DataFrame(matches['W/L'].str.split(' - ',1).tolist(),columns = [teamName,'Adv'])
     totalrounds[teamName] = totalrounds[teamName].astype(int)
-    totalrounds['Opponent'] = totalrounds['Opponent'].astype(int)
-    totalrounds['Total Rounds'] = totalrounds[teamName] + totalrounds['Opponent']
+    totalrounds['Adv'] = totalrounds['Adv'].astype(int)
+    totalrounds['Total Rounds'] = totalrounds[teamName] + totalrounds['Adv']
 
     df_concat = pd.concat([matches, totalrounds], axis=1)
     df_concat.rename(columns={'Opponent':'del','Unnamed: 6': 'W/L','W/L': 'Result','Map':'Opponent','Result':'Map'}, inplace=True)
