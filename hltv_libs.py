@@ -251,7 +251,6 @@ def get_team_power(team_):
         if players_add > 0:
             for i in range(players_add):
                 team_score = team_score.append(missing_players,ignore_index=True)
-        
         output.update({'Team':team_score['Team'][0],'Rating 2.0':round(team_score['Rating 2.0'].sum(),2),'K/D Ratio':round(team_score['K/D Ratio'].sum(),2),'Round Performance':round(team_score['Round Performance'].sum(),2),'Overall Performance':round(team_score['Overall Performance'].sum(),2),'Gain':round(team_score['Gain'].sum(),4)})
     except:
         pass
@@ -260,36 +259,13 @@ def get_team_power(team_):
 
 def get_matches():
     output = pd.DataFrame()
-    matches = get_parsed_page("http://www.hltv.org/matches/")
-    matches_list = {}
-    upcomingmatches = matches.find("div", {"class": "upcoming-matches"})
-
-    matchdays = upcomingmatches.find_all("div", {"class": "match-day"})
-
-    for match in matchdays:
-        matchDetails = match.find_all("div", {"class": "match"})
-
-        for getMatch in matchDetails:
-            matchObj = {}
-
-            matchObj['date'] = getMatch.find("span", {"class": "standard-headline"})
-            matchObj['ulr'] = 'https://www.hltv.org' + getMatch.find("a",{"class":"a-reset"})['href'].replace('/betting/analytics','')
-            matchObj['time'] = getMatch.find("td", {"class": "time"}).text.replace('\n','')
-            if (getMatch.find("td", {"class": "placeholder-text-cell"})):
-                matchObj['event'] = getMatch.find("td", {"class": "placeholder-text-cell"})
-            elif (getMatch.find("td", {"class": "event"})):
-                matchObj['event'] = getMatch.find("td", {"class": "event"}).text
-            else:
-                matchObj['event'] = None
-
-            if (getMatch.find_all("td", {"class": "team-cell"})):
-                matchObj['team1'] = getMatch.find_all("td", {"class": "team-cell"})[0].text.replace('\n','')
-                matchObj['team2'] = getMatch.find_all("td", {"class": "team-cell"})[1].text.replace('\n','')
-            else:
-                matchObj['team1'] = None
-                matchObj['team2'] = None
-            output = output.append(matchObj, ignore_index=True)
-    return output
+    page = get_parsed_page("http://www.hltv.org/matches")
+    matches_list = []
+    upcoming = page.find_all("div", {"class": "upcomingMatchesSection"})
+    matches = upcoming[0].find_all("a", {"class": "match a-reset"})
+    for match in matches:
+        matches_list.append(match['href'])
+    return matches_list
 
 def get_results():
     results = get_parsed_page("http://www.hltv.org/results/")
